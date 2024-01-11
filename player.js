@@ -1,5 +1,7 @@
 // player.js
 
+YT_API_KEY = 'AIzaSyDFH5sy-cCqcSEp0BIl8DlW3fIfvMepYNU';
+
 var auth_data;
 let vidId = "nvVftQ2ZE94" // defaults
 let vidUrl = "https://www.youtube.com/watch?v=" + vidId
