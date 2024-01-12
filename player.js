@@ -118,6 +118,9 @@ function seekTo(timeVideoSeconds) {
 let dblClick = false
 async function sendBtnEvent(btn, timeVideoSeconds) {
     if(!auth_data || dblClick) return;
+    const button = document.getElementById(`id_btn_${btn}`);
+    button.disabled = true;
+    button.style.cursor = 'wait';
     dblClick = true
     const response = await api_request(api_url + api_btn_url, {
         method: 'POST',
@@ -152,14 +155,15 @@ async function sendBtnEvent(btn, timeVideoSeconds) {
             arrBtn3[timeGraphic.indexOf(timeVideoSeconds)]++
         }   
         chart.update() //обновляем график        
-    } else {
-        // TODO remove alerts
-        alert("sendbtn" + response);
-    }   
+    }
+    button.disabled = false;
+    button.style.cursor = null;
 }
 
 async function onDelBtnEvent(event) {
     if(!auth_data) return;
+    const table = document.getElementById('id_timetable');
+    table.style.cursor = 'wait';
     let timeSeconds = getTimeSeconds(event.previousSibling.textContent)
     const response = await api_request(api_url + api_btn_url, {
         method: 'DELETE',
@@ -175,20 +179,20 @@ async function onDelBtnEvent(event) {
         // const data = response.data;
         remVote(event.previousSibling)
         chart.update()
-    } else { alert("delbtn" + response); }
+    }
+    table.style.cursor = null;
 }
 
 async function getUserVotes() {
     if(!auth_data) return;
-    var headers = auth_data ? { 'Authorization': 'Token ' + auth_data.auth_token } : {};
     const response = await api_request(
         api_url + api_user_votes_url + '?source=' + wsource + '&videoid=' + vidId,
         {
-            headers: headers,
             type: 'GET',
             contentType: 'application/json; charset=utf-8',
             dataType: 'json',
-        }                            
+            auth_token: auth_data.auth_token
+        }
     );
     if (response.ok) {
         const data = response.data;
@@ -260,14 +264,13 @@ function createStrokTable(dateTime, btnName, bHighLight, timeVideoSeconds) {
 
 async function getSumVotes() {
     if(!auth_data) return;
-    var headers = auth_data ? { 'Authorization': 'Token ' + auth_data.auth_token } : {};
     const response = await api_request(
         api_url + api_sum_url + '?source=' + wsource + '&videoid=' + vidId,
         {
-            headers: headers,
             type: 'GET',
             contentType: 'application/json; charset=utf-8',
             dataType: 'json',
+            auth_token: auth_data.auth_token
         }                            
     );
     if (response.ok) {
