@@ -23,7 +23,8 @@ button {
     border-radius: 10px;
 }
 
-a {
+/* Кнопки с вызовом другого URL */
+.btn-href {
     display: block;
     text-decoration: none;
     color: inherit;

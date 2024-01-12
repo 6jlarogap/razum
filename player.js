@@ -340,6 +340,53 @@ $(document).ready( async function() {
         })
     })
 
+    document.addEventListener("click", async function(event) {
+        event.preventDefault();
+        if(event.target.closest(".buttons__btn--map")) {
+            let url_str = map_url + "/?videoid=" + vidId + "&source=" + wsource
+                + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
+                + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
+
+            if (auth_data) {
+                const response = await api_request(api_url + api_auth_temp_token_url, {
+                    method: 'POST',
+                    json: { auth_data: auth_data, },
+                    auth_token: auth_data.auth_token
+                });
+                if (response.ok) { // put token in url
+                    const data = response.data;
+                    if (data.authdata_token) {
+                        url_str += "&authdata_token=" + data.authdata_token
+                    }
+                }
+            }
+            openBtnLink(url_str)
+        }
+        if(event.target.closest(".buttons__btn--scheme")) {
+            let url_str = graph_url +"/?videoid=" + vidId + "&source=" + wsource
+                + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
+                + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
+
+            if (auth_data) {
+                const response = await api_request(api_url + api_auth_temp_token_url, {
+                    method: 'POST',
+                    json: { auth_data: auth_data, },
+                    auth_token: auth_data.auth_token
+                });
+                if (response.ok) { // put token in url
+                    const data = response.data;
+                    if (data.authdata_token) {
+                        url_str += "&authdata_token=" + data.authdata_token
+                    }
+                }
+            }
+            openBtnLink(url_str)
+        }
+        if(event.target.closest(".graphic-button")) {
+            getSumVotes()
+        }
+    })
+
     // получаем данные о суммах голосов
     await getSumVotes();
     await getUserVotes();
@@ -611,52 +658,6 @@ function openBtnLink(url_str) {
     window.open(url_str, '_blank').focus();    
 }
 
-document.addEventListener("click", async function(event) {
-    event.preventDefault();
-    if(event.target.closest(".buttons__btn--map")) {
-        let url_str = map_url + "/?videoid=" + vidId + "&source=" + wsource
-            + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
-            + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
-        
-        if (auth_data) {
-            const response = await api_request(api_url + api_auth_temp_token_url, {
-                method: 'POST',
-                json: { auth_data: auth_data, },
-                auth_token: auth_data.auth_token
-            });
-            if (response.ok) { // put token in url 
-                const data = response.data;
-                if (data.authdata_token) { 
-                    url_str += "&authdata_token=" + data.authdata_token 
-                }
-            }
-        }
-        openBtnLink(url_str)
-    }
-    if(event.target.closest(".buttons__btn--scheme")) {
-        let url_str = graph_url +"/?videoid=" + vidId + "&source=" + wsource
-            + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
-            + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
-        
-        if (auth_data) {
-            const response = await api_request(api_url + api_auth_temp_token_url, {
-                method: 'POST',
-                json: { auth_data: auth_data, },
-                auth_token: auth_data.auth_token
-            });
-            if (response.ok) { // put token in url 
-                const data = response.data;
-                if (data.authdata_token) { 
-                    url_str += "&authdata_token=" + data.authdata_token 
-                }
-            }
-        }
-        openBtnLink(url_str)
-    }
-    if(event.target.closest(".graphic-button")) {
-        getSumVotes()
-    }
-})
 
 function updateTimeAxis(timeVideoSeconds) {
     // добавление времени на шкалу и в массивы графика
