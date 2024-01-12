@@ -157,7 +157,7 @@ async function sendBtnEvent(btn, timeVideoSeconds) {
         chart.update() //обновляем график        
     }
     button.disabled = false;
-    button.style.cursor = null;
+    button.style.cursor = 'pointer';
 }
 
 async function onDelBtnEvent(event) {
