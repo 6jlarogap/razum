@@ -1,12 +1,21 @@
 // player.js
 
-YT_API_KEY = 'AIzaSyDFH5sy-cCqcSEp0BIl8DlW3fIfvMepYNU';
+const YT_API_KEY = 'AIzaSyDFH5sy-cCqcSEp0BIl8DlW3fIfvMepYNU';
 
-var auth_data;
+// Источник записи, по умолчанию yt: YouTube,
+// но закладывается еще и pt: PeerTube
+//
+const SOURCE_YOUTUBE = 'yt';
+const SOURCE_PEERTUBE = 'pt';
+
+let auth_data;
+
 let vidId = "nvVftQ2ZE94" // defaults
 let vidUrl = "https://www.youtube.com/watch?v=" + vidId
+let wsource = SOURCE_YOUTUBE;
+
 let youtubePlayer, peerPlayer;
-var vidTime;
+let vidTime;
 let peerPosition = 0.0;
 
 document.querySelector(".buttons__input--left").value = "0:00"
@@ -21,9 +30,6 @@ var api_auth_temp_token_url = "/api/token/authdata/"
 
 const graph_url = get_graph_url();
 const map_url = get_map_url();
-// Источник записи, по умолчанию yt: YouTube,
-// но закладывается еще и pt: PeerTube
-let wsource = 'yt';
 
 // массивы для таблицы и графика
 var timeGraphic = [0]
@@ -102,9 +108,9 @@ document.getElementById("graphic").onclick = function(event) {
 
 
 function seekTo(timeVideoSeconds) {
-    if (wsource == 'yt') {
+    if (wsource == SOURCE_YOUTUBE) {
         youtubePlayer.seekTo(timeVideoSeconds);
-    } else if (wsource == 'pt') {
+    } else if (wsource == SOURCE_PEERTUBE) {
         peerPlayer.seek(timeVideoSeconds);
     }
 }
@@ -306,12 +312,12 @@ $(document).ready( async function() {
         }
     }
     // настройка проигрывателей
-    if (wsource === 'yt') {
+    if (wsource == SOURCE_YOUTUBE) {
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-    } // else if (wsource === 'pt') {
+    } // else if (wsource == SOURCE_PEERTUBE) {
     // }
     
     document.querySelectorAll(".btn").forEach(function(event) {  // ищем все кнопки и ставим на все кнопки прослушки
@@ -338,10 +344,10 @@ $(document).ready( async function() {
 
 function getCurrentTime() {
     // текущие секунды на проигрывателе, с той точностью, которую дает проигрыватель
-    if (wsource === 'yt') {
+    if (wsource == SOURCE_YOUTUBE) {
         const timeVideoSeconds = youtubePlayer.getCurrentTime();
         result = timeVideoSeconds ? timeVideoSeconds : 0.0;
-    }  else if (wsource === 'pt') {
+    }  else if (wsource == SOURCE_PEERTUBE) {
         result = peerPosition;
     }
     return result;
@@ -455,7 +461,7 @@ async function clearURL(urlStr) {
         if (youtubeUrlSep) {
             // Это youtube video
             document.querySelector("#id_youtube_player").classList.remove("display--none");
-            wsource = 'yt';
+            wsource = SOURCE_YOUTUBE;
             if(urlStr.includes("&t=")) {
                 vidTime = urlStr.substring(urlStr.indexOf("&t="))
                     .replace("&t=", "")
@@ -480,7 +486,7 @@ async function clearURL(urlStr) {
             });
         } else if (peerMatch) {
             // Это PeerTube video
-            wsource = 'pt';
+            wsource = SOURCE_PEERTUBE;
             vidUrl = `${peerMatch[1]}/${peerMatch[2]}/${peerMatch[3]}`;
             vidId = peerMatch[3];
             const peerSrc = `${peerMatch[1]}/videos/embed/${peerMatch[3]}?api=1&warningTitle=0`;
