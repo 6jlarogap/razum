@@ -1,9 +1,22 @@
-var auth_data
+// player.js
+
+const YT_API_KEY = 'AIzaSyDFH5sy-cCqcSEp0BIl8DlW3fIfvMepYNU';
+
+// Источник записи, по умолчанию yt: YouTube,
+// но закладывается еще и pt: PeerTube
+//
+const SOURCE_YOUTUBE = 'yt';
+const SOURCE_PEERTUBE = 'pt';
+
+let auth_data;
+
 let vidId = "nvVftQ2ZE94" // defaults
 let vidUrl = "https://www.youtube.com/watch?v=" + vidId
-let wsource = 'yt' // default for yt
-var player
-var vidTime
+let wsource = SOURCE_YOUTUBE;
+
+let youtubePlayer, peerPlayer;
+let vidTime;
+let peerPosition = 0.0;
 
 document.querySelector(".buttons__input--left").value = "0:00"
 document.querySelector(".buttons__input--right").value = "0:00"
@@ -14,6 +27,9 @@ var api_btn_url = "/api/wote/vote/"
 var api_sum_url = "/api/wote/vote/sums/"
 var api_user_votes_url = "/api/wote/vote/my/"
 var api_auth_temp_token_url = "/api/token/authdata/"
+
+const graph_url = get_graph_url();
+const map_url = get_map_url();
 
 // массивы для таблицы и графика
 var timeGraphic = [0]
@@ -79,20 +95,32 @@ var chart = new Chart(document.getElementById("graphic"), {
     }
 });
 
-// todo check graphic clicks
 document.getElementById("graphic").onclick = function(event) {
     let points = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
     if (points.length > 0) {
         let firstPoint = points[0];
         let labelAll = String(chart.data.labels[firstPoint.index]);
-        player.seekTo(getTimeSeconds(labelAll));
-        timeForEdit(getTimeSeconds(labelAll))
+        const timeVideoSeconds = getTimeSeconds(labelAll);
+        seekTo(timeVideoSeconds);
+        timeForEdit(timeVideoSeconds)
+    }
+}
+
+
+function seekTo(timeVideoSeconds) {
+    if (wsource == SOURCE_YOUTUBE) {
+        youtubePlayer.seekTo(timeVideoSeconds);
+    } else if (wsource == SOURCE_PEERTUBE) {
+        peerPlayer.seek(timeVideoSeconds);
     }
 }
 
 let dblClick = false
 async function sendBtnEvent(btn, timeVideoSeconds) {
     if(!auth_data || dblClick) return;
+    const button = document.getElementById(`id_btn_${btn}`);
+    button.disabled = true;
+    button.style.cursor = 'wait';
     dblClick = true
     const response = await api_request(api_url + api_btn_url, {
         method: 'POST',
@@ -127,14 +155,15 @@ async function sendBtnEvent(btn, timeVideoSeconds) {
             arrBtn3[timeGraphic.indexOf(timeVideoSeconds)]++
         }   
         chart.update() //обновляем график        
-    } else {
-        // todo remove alerts
-        alert("sendbtn" + response);
-    }   
+    }
+    button.disabled = false;
+    button.style.cursor = 'pointer';
 }
 
 async function onDelBtnEvent(event) {
     if(!auth_data) return;
+    const table = document.getElementById('id_timetable');
+    table.style.cursor = 'wait';
     let timeSeconds = getTimeSeconds(event.previousSibling.textContent)
     const response = await api_request(api_url + api_btn_url, {
         method: 'DELETE',
@@ -150,20 +179,20 @@ async function onDelBtnEvent(event) {
         // const data = response.data;
         remVote(event.previousSibling)
         chart.update()
-    } else { alert("delbtn" + response); }
+    }
+    table.style.cursor = null;
 }
 
 async function getUserVotes() {
     if(!auth_data) return;
-    var headers = auth_data ? { 'Authorization': 'Token ' + auth_data.auth_token } : {};
     const response = await api_request(
         api_url + api_user_votes_url + '?source=' + wsource + '&videoid=' + vidId,
         {
-            headers: headers,
             type: 'GET',
             contentType: 'application/json; charset=utf-8',
             dataType: 'json',
-        }                            
+            auth_token: auth_data.auth_token
+        }
     );
     if (response.ok) {
         const data = response.data;
@@ -219,9 +248,9 @@ function createStrokTable(dateTime, btnName, bHighLight, timeVideoSeconds) {
     td3Table.onmouseout = function() { removeClassTd(this) }
     td3Table.textContent = timeVideo //помещаем в 3 ячейку время на видео
     td3Table.onclick = function() { 
-      player.seekTo(timeVideoSeconds)
+      seekTo(timeVideoSeconds)
       timeForEdit(timeVideoSeconds)
-      document.querySelector("#player").scrollIntoView({ //скроллим до плеера
+      document.querySelector("#id_youtube_player").scrollIntoView({ //скроллим до плеера
           behavior: 'smooth',
           block: 'center'
       });
@@ -235,14 +264,13 @@ function createStrokTable(dateTime, btnName, bHighLight, timeVideoSeconds) {
 
 async function getSumVotes() {
     if(!auth_data) return;
-    var headers = auth_data ? { 'Authorization': 'Token ' + auth_data.auth_token } : {};
     const response = await api_request(
         api_url + api_sum_url + '?source=' + wsource + '&videoid=' + vidId,
         {
-            headers: headers,
             type: 'GET',
             contentType: 'application/json; charset=utf-8',
             dataType: 'json',
+            auth_token: auth_data.auth_token
         }                            
     );
     if (response.ok) {
@@ -277,7 +305,7 @@ $(document).ready( async function() {
         window.location.reload();
     });
 
-    clearURL(window.location.href.toString()) // clear url
+    await clearURL(window.location.href.toString());
 
     if(window.location.hash != ("#" + vidUrl)){
         if(window.location.hash){ // если хэш имеется - обновляем, нет - создаём
@@ -286,36 +314,95 @@ $(document).ready( async function() {
             window.location.href += "#" + vidUrl
         }
     }
-
-    // настройка проигрывателя
-    var tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-    var firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    // настройка проигрывателей
+    if (wsource == SOURCE_YOUTUBE) {
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    } // else if (wsource == SOURCE_PEERTUBE) {
+    // }
     
     document.querySelectorAll(".btn").forEach(function(event) {  // ищем все кнопки и ставим на все кнопки прослушки
-        event.addEventListener("click", function() { // если мы нажали на эту кнопку то..
-            let timeVideoSeconds = !player.getCurrentTime ? //проверяем, можно ли брать с видео время
-                0.0 //если нельзя, то ставим ноль
-                :   
-                Math.floor(player.getCurrentTime()) //если можно, то получаем время остановы в секундах
+        event.addEventListener("click", function() {
+            // если мы нажали на эту кнопку то..
+            const timeVideoSeconds = Math.floor(getCurrentTime());
 
             if(event.textContent == "Да") { //если содержимое нажатой кнопки равно да/нет/неясно
                 sendBtnEvent("yes", timeVideoSeconds)
             }
-            if(event.textContent == "Нет") {
+            else if(event.textContent == "Нет") {
                 sendBtnEvent("no", timeVideoSeconds)
             }
-            if(event.textContent == "Неясно") {
+            else if(event.textContent == "Неясно") {
                 sendBtnEvent("not", timeVideoSeconds)
             }
         })
+    })
+
+    document.addEventListener("click", async function(event) {
+        event.preventDefault();
+        if(event.target.closest(".buttons__btn--map")) {
+            let url_str = map_url + "/?videoid=" + vidId + "&source=" + wsource
+                + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
+                + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
+
+            if (auth_data) {
+                const response = await api_request(api_url + api_auth_temp_token_url, {
+                    method: 'POST',
+                    json: { auth_data: auth_data, },
+                    auth_token: auth_data.auth_token
+                });
+                if (response.ok) { // put token in url
+                    const data = response.data;
+                    if (data.authdata_token) {
+                        url_str += "&authdata_token=" + data.authdata_token
+                    }
+                }
+            }
+            openBtnLink(url_str)
+        }
+        if(event.target.closest(".buttons__btn--scheme")) {
+            let url_str = graph_url +"/?videoid=" + vidId + "&source=" + wsource
+                + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
+                + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
+
+            if (auth_data) {
+                const response = await api_request(api_url + api_auth_temp_token_url, {
+                    method: 'POST',
+                    json: { auth_data: auth_data, },
+                    auth_token: auth_data.auth_token
+                });
+                if (response.ok) { // put token in url
+                    const data = response.data;
+                    if (data.authdata_token) {
+                        url_str += "&authdata_token=" + data.authdata_token
+                    }
+                }
+            }
+            openBtnLink(url_str)
+        }
+        if(event.target.closest(".graphic-button")) {
+            getSumVotes()
+        }
     })
 
     // получаем данные о суммах голосов
     await getSumVotes();
     await getUserVotes();
 });
+
+function getCurrentTime() {
+    // текущие секунды на проигрывателе, с той точностью, которую дает проигрыватель
+    if (wsource == SOURCE_YOUTUBE) {
+        const timeVideoSeconds = youtubePlayer.getCurrentTime();
+        result = timeVideoSeconds ? timeVideoSeconds : 0.0;
+    }  else if (wsource == SOURCE_PEERTUBE) {
+        result = peerPosition;
+    }
+    return result;
+
+}
 
 function getTimeSeconds(timeTableArr) { //функция перевода времени в секунды
     //Здесь мы переводим из часов, минут и секунд только в секунды
@@ -375,50 +462,125 @@ function remVote(elem) {
     elem.parentNode.remove()
 }
         
-function clearURL(urlStr) {
+async function clearURL(urlStr) {
     if(urlStr.includes("#https://")) { //если в строке урл не будет никакой ссылки
-        let split
+
+        /*
+         *  PeerTube videos urls. Возможны варианты:
+         *      чаще всего:
+                    (1) https://ijoo.ru/w/d95GcYHiowcbW67wX4WTPt
+                но не исключается:
+                    (2) https://ijoo.ru/videos/watch/d95GcYHiowcbW67wX4WTPt
+                            делается redirect на (1)
+                    (3) https://ijoo.ru/videos/embed/d95GcYHiowcbW67wX4WTPt
+                            применяется для embed into iframe, но никто не запрещает
+                            указать (3) в адресной строке
+                ОДНАКО, возможно еще для того же видео:
+                    (4) https://ijoo.ru/w/624e81a1-e9a9-462a-b6da-07b95a02d56d
+                для устаревших PeerTube серверов единственно возможные варианты:
+                    (5) https://ijoo.ru/videos/watch/624e81a1-e9a9-462a-b6da-07b95a02d56d
+                            делается redirect на (4) в последних PeerTube серверах
+                    (6) https://ijoo.ru/videos/embed/624e81a1-e9a9-462a-b6da-07b95a02d56d
+                            применяется для embed into iframe, но никто не запрещает
+                            указать (6) в адресной строке
+            Пока заложены (1) - (3)? с короткими uuids.
+            Они однозначно преобразуются в длинные, а длинные однозначно преобразуются в короткие,
+            https://github.com/Chocobozzz/PeerTube/pull/4212 , но без разворачивания npm структуры,
+            решение означенных преобразований пока не найдено.
+            Даже после учета длинных uuids (варианты (4) - (6)), будем хранить в апи, как и сейчас,
+            короткие uuids для идентификации PeerTube video.
+
+            TODO
+            Учесть длиннные uuids для Peertube videos.
+        */
+        const peerRegex = /\#(https?:\/\/[\w\.]+\.[\w]{2,10})\/(w|videos\/watch|videos\/embed)\/([0-9A-Za-z]{22})/;
+
+        let youtubeUrlSep, peerMatch;
         if(urlStr.includes("https://www.youtube.com/watch?v=")) {  //если мы вставили обычную ссылку
-            split = "watch?v="
+            youtubeUrlSep = "watch?v="
         } else if(urlStr.includes("https://www.youtube.com/live/")) {  //если мы вставили live ссылку
-            split = "live/"
+            youtubeUrlSep = "live/"
         } else if(urlStr.includes("https://www.youtube.com/shorts")
         || urlStr.includes("https://youtube.com/shorts/")) {  //если мы вставили шортс ссылку
-            split = "shorts/"
+            youtubeUrlSep = "shorts/"
         } else if (urlStr.includes("https://youtu.be/")) { //если мы вставили укороченную ссылку
-            split = "youtu.be/"
+            youtubeUrlSep = "youtu.be/"
+        } else if (peerMatch = peerRegex.exec(urlStr)) {
         }
 
-        if(urlStr.includes("&t=")) {
-            vidTime = urlStr.substring(urlStr.indexOf("&t="))
-                .replace("&t=", "")
-                .replace("s", "")//получаем секунды остановленного времени видео
+        if (youtubeUrlSep) {
+            // Это youtube video
+            document.querySelector("#id_youtube_player").classList.remove("display--none");
+            wsource = SOURCE_YOUTUBE;
+            if(urlStr.includes("&t=")) {
+                vidTime = urlStr.substring(urlStr.indexOf("&t="))
+                    .replace("&t=", "")
+                    .replace("s", "")//получаем секунды остановленного времени видео
+            }
+
+            vidId = urlStr //заполняем ид видео
+                .split(youtubeUrlSep) //обрезаем урл
+                .pop() //получаем последний элемент после youtubeUrlSep
+                .replace('?feature=share','')
+                .replace(/&t.*/, "");
+            vidUrl = urlStr // заполняем урл видео
+                .split("#") //обрезаем урл
+                .pop() //обрезаем ссылку для урл
+                .replace('?feature=share','');
+            // console.log(vidId, vidUrl); // luKquWe89jo https://www.youtube.com/watch?v=luKquWe89jo
+
+            fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vidId}&key=${YT_API_KEY}`)
+            .then(response => response.json())
+            .then(data => {
+                document.title = `КР-${data.items[0].snippet.title}`
+            });
+        } else if (peerMatch) {
+            // Это PeerTube video
+            wsource = SOURCE_PEERTUBE;
+            vidUrl = `${peerMatch[1]}/${peerMatch[2]}/${peerMatch[3]}`;
+            vidId = peerMatch[3];
+            const peerSrc = `${peerMatch[1]}/videos/embed/${peerMatch[3]}?api=1&warningTitle=0`;
+            const peerContainer = document.querySelector('#id_peer_player');
+            peerContainer.classList.remove("display--none");
+            peerContainer.src = peerSrc;
+            const PeerTubePlayer = window['PeerTubePlayer'];
+            peerPlayer = new PeerTubePlayer(peerContainer);
+            peerPlayer.addEventListener('playbackStatusUpdate', (e) => peerStatusCall(e));
+            peerPlayer.addEventListener('playbackStatusChange', (e) => peerStatusCall(e));
+            await peerPlayer.ready;
+            peerPlayer.play();
+            /*
+             * Не удается получить заголовок PeerTube видео.
+             * await peerPlayer.getCaptions() по описанию
+             * должно отдавать заголовок, но возвращает пустой массив.
+            */
+            document.title = 'Коллективный разум';
         }
-
-        vidId = urlStr //заполняем ид видео
-            .split(split) //обрезаем урл
-            .pop() //удаляем ненужный последний элемент
-            .replace('?feature=share','')
-            .replace(/&t.*/, "")
-        vidUrl = urlStr // заполняем урл видео
-            .split("#") //обрезаем урл
-            .pop() //обрезаем ссылку для урл
-            .replace('?feature=share','')    
-
-        fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vidId}&key=${YT_API_KEY}`)
-        .then(response => response.json())
-        .then(data => {
-            document.title = `КР-${data.items[0].snippet.title}`
-        });
-    } 
+    }
 }
 
+const peerStatusCall = (e) => {
+    if (
+        typeof(e) === 'object' &&
+        'position' in e &&
+        'playbackState' in e &&
+         ["playing", "paused"].includes(e.playbackState)
+      ) {
+        if (peerPosition != e.position) {
+            peerPosition = e.position;
+            timeForEdit(Math.floor(peerPosition));
+        }
+    }
+    // console.log(`Peertube position: ${peerPosition}`);
+};
+
+
 function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
+    youtubePlayer = new YT.Player("id_youtube_player", {
         videoId: vidId, //ид видео из урл
         events: {
-            'onReady': onPlayerReady,
-            'onStateChange': onPlayerStateChange,
+            'onReady': onYoutubePlayerReady,
+            'onStateChange': onYoutubePlayerStateChange,
         },
         playerVars: {
             'start': vidTime
@@ -426,43 +588,45 @@ function onYouTubeIframeAPIReady() {
     });
 }
 
-function onPlayerStateChange() {
-    timeForEdit(Math.floor(player.getCurrentTime()))
+function onYoutubePlayerStateChange() {
+    timeForEdit(Math.floor(youtubePlayer.getCurrentTime()));
 }
 
-function onPlayerReady(event) { //заполнение инпут полей текущим временем из видео при проигрывании 
+function onYoutubePlayerReady(event) { //заполнение инпут полей текущим временем из видео при проигрывании 
     event.target.playVideo();
     setInterval(() => {
-        if(player.getPlayerState() == 1) {
-            timeForEdit(Math.floor(player.getCurrentTime()))
-            if(player.getPlayerState() == 2) {
-                timeForEdit(Math.floor(player.getCurrentTime()))
+        if(youtubePlayer.getPlayerState() == 1) {
+            timeForEdit(Math.floor(youtubePlayer.getCurrentTime()))
+            if(youtubePlayer.getPlayerState() == 2) {
+                timeForEdit(Math.floor(youtubePlayer.getCurrentTime()))
             }
         }
     }, 100);
 }
 
 function addClassTd(elem) {
-    if(getTimeSeconds(elem.textContent) < Math.floor(player.getCurrentTime())) {
+    const timeVideoSeconds = Math.floor(getCurrentTime());
+    if(getTimeSeconds(elem.textContent) <timeVideoSeconds) {
         elem.classList.add("td3Table--right")
     }
-    if(getTimeSeconds(elem.textContent) == Math.floor(player.getCurrentTime())) {
+    if(getTimeSeconds(elem.textContent) == timeVideoSeconds) {
         elem.classList.add("td3Table--middle")
     }
-    if(getTimeSeconds(elem.textContent) > Math.floor(player.getCurrentTime())) {
+    if(getTimeSeconds(elem.textContent) > timeVideoSeconds) {
         elem.classList.add("td3Table--left")
     }
     elem.classList.add("hover")
 }
 
 function removeClassTd(elem) {
-    if(getTimeSeconds(elem.textContent) < Math.floor(player.getCurrentTime())) {
+    const timeVideoSeconds = Math.floor(getCurrentTime());
+    if(getTimeSeconds(elem.textContent) < timeVideoSeconds) {
         elem.classList.remove("td3Table--right")
     }
-    if(getTimeSeconds(elem.textContent) == Math.floor(player.getCurrentTime())) {
+    if(getTimeSeconds(elem.textContent) == timeVideoSeconds) {
         elem.classList.remove("td3Table--middle")
     }
-    if(getTimeSeconds(elem.textContent) > Math.floor(player.getCurrentTime())) {
+    if(getTimeSeconds(elem.textContent) > timeVideoSeconds) {
         elem.classList.remove("td3Table--left")
     }
     elem.classList.remove("hover")
@@ -478,11 +642,11 @@ function timeForEdit(time) {
 }
 
 function stopVideo() {
-    player.stopVideo();
+    youtubePlayer.stopVideo();
 } 
 /*
 function mapSchemeLink(btn, url) {
-    var href_url = btn + url + vidId + "&source=yt"
+    var href_url = btn + url + vidId + "&source=" + wsource
     + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
     + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
 //    document.querySelector(btn).href = href_url 
@@ -494,52 +658,6 @@ function openBtnLink(url_str) {
     window.open(url_str, '_blank').focus();    
 }
 
-document.addEventListener("click", async function(event) {
-    event.preventDefault();
-    if(event.target.closest(".buttons__btn--map")) {
-        var url_str = "https://map.blagoroda.org/?videoid=" + vidId + "&source=yt"
-            + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
-            + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
-        
-        if (auth_data) {
-            const response = await api_request(api_url + api_auth_temp_token_url, {
-                method: 'POST',
-                json: { auth_data: auth_data, },
-                auth_token: auth_data.auth_token
-            });
-            if (response.ok) { // put token in url 
-                const data = response.data;
-                if (data.authdata_token) { 
-                    url_str += "&authdata_token=" + data.authdata_token 
-                }
-            }
-        }
-        openBtnLink(url_str)
-    }
-    if(event.target.closest(".buttons__btn--scheme")) {
-        var url_str = "https://graph.blagoroda.org/?videoid=" + vidId + "&source=yt"
-            + "&f=" + getTimeSeconds(document.querySelector(".buttons__input--left").value)
-            + "&t=" + getTimeSeconds(document.querySelector(".buttons__input--right").value)
-        
-        if (auth_data) {
-            const response = await api_request(api_url + api_auth_temp_token_url, {
-                method: 'POST',
-                json: { auth_data: auth_data, },
-                auth_token: auth_data.auth_token
-            });
-            if (response.ok) { // put token in url 
-                const data = response.data;
-                if (data.authdata_token) { 
-                    url_str += "&authdata_token=" + data.authdata_token 
-                }
-            }
-        }
-        openBtnLink(url_str)
-    }
-    if(event.target.closest(".graphic-button")) {
-        getSumVotes()
-    }
-})
 
 function updateTimeAxis(timeVideoSeconds) {
     // добавление времени на шкалу и в массивы графика

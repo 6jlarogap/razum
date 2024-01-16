@@ -16,8 +16,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
     <script defer src="local_settings.js"></script>
     <script defer src="https://graph.blagoroda.org/js/funcs.js"></script>
-    
-    <!-- Проигрыватель -->
+
+    <script defer src="https://unpkg.com/@peertube/embed-api/build/player.min.js"></script>
+
     <link rel="stylesheet" href="style.css">
     <link rel="shortcut icon" href="#">
     <script defer src="player.js"></script>
@@ -26,26 +27,35 @@
     <div class="container">
         <h2 class="form-title">Коллективный Разум</h1>
         <form class="form" action="#">
-            <input onfocus="this.select()" class="form__text" type="text" placeholder="Введите ссылку на ютуб видео...">
+            <input onfocus="this.select()" class="form__text" type="text" placeholder="Введите ссылку на youtube или peertube видео...">
             <button class="form__btn" onclick="btnForm()">Открыть</button>
         </form>
-        <div id="player"></div> <!-- Проигрыватель -->
+
+        <div id="id_youtube_player" class="display--none"></div> <!-- Проигрыватель -->
+        <iframe  class="display--none"
+            id="id_peer_player"
+            allowfullscreen=""
+            width="600"
+            height="400"
+            frameborder="2"
+        ></iframe>
+
         <div class="block-btns">
-            <button class="btn btn--2 no">Нет</button>
-            <button class="btn btn--3 not">Неясно</button>
-            <button class="btn btn--1 yes">Да</button>
+            <button class="btn btn--2 no" id="id_btn_no">Нет</button>
+            <button class="btn btn--3 not" id="id_btn_not">Неясно</button>
+            <button class="btn btn--1 yes" id="id_btn_yes">Да</button>
         </div>
         <div class="buttons">
-            <a href="#" class="buttons__btn buttons__btn--map" target="_blank">Карта</a>
+            <a href="#" class=".btn--href buttons__btn buttons__btn--map" target="_blank">Карта</a>
             <input type="text" class="buttons__input buttons__input--left">
             <input type="text" class="buttons__input buttons__input--right">
-            <a href="#" class="buttons__btn buttons__btn--scheme" target="_blank">Схема</a>
+            <a href="#" class=".btn--href buttons__btn buttons__btn--scheme" target="_blank">Схема</a>
         </div>
         <div class="graphic-container">
             <canvas height="500" id="graphic"></canvas>
         </div>
         <button class="graphic-button">Обновить график</button>
-        <table class="table">
+        <table class="table" id="id_timetable">
             <tr class="trBlockTable">
                 <td>Дата и время</td>
                 <td>Имя кнопки</td>
